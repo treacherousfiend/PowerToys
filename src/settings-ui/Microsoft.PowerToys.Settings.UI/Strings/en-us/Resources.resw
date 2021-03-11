@@ -491,6 +491,15 @@
   <data name="ShortcutGuide_OverlayOpacity.Header" xml:space="preserve">
     <value>Opacity of background</value>
   </data>
+  <data name="ShortcutGuide_DisabledApps.Text" xml:space="preserve">
+    <value>Disable for apps</value>
+  </data>
+  <data name="ShortcutGuide_DisabledApps_TextBoxControl.Header" xml:space="preserve">
+    <value>Turn off Shortcut Guide when these applications have focus. Add one application name per line.</value>
+  </data>
+  <data name="ShortcutGuide_DisabledApps_TextBoxControl.PlaceholderText" xml:space="preserve">
+    <value>Example: outlook.exe</value>
+  </data>
   <data name="ImageResizer_CustomSizes.Text" xml:space="preserve">
     <value>Image sizes</value>
   </data>

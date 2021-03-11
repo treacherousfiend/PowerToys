@@ -16,6 +16,7 @@
 #include <common/utils/resources.h>
 #include <common/utils/winapi_error.h>
 #include <common/utils/window.h>
+#include <Psapi.h>
 // TODO: refactor singleton
 OverlayWindow* instance = nullptr;
 
@@ -41,6 +42,7 @@ namespace
     {
         HWND hwnd = nullptr; // Handle to the top-level foreground window or nullptr if there is no such window
         bool snappable = false; // True, if the window can react to Windows Snap keys
+        bool disabled = false;
     };
 
     ShortcutGuideWindowInfo GetShortcutGuideWindowInfo()
@@ -52,6 +54,16 @@ namespace
         {
             return result;
         }
+
+        DWORD pid;
+        WCHAR exePath[MAX_PATH]; 
+        GetWindowThreadProcessId(active_window, &pid);
+        HANDLE processHandle = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
+        GetProcessImageFileName(processHandle, exePath, MAX_PATH);
+        CloseHandle(processHandle);
+
+        result.disabled = instance->is_disabled_app(exePath);
+
         auto style = GetWindowLong(active_window, GWL_STYLE);
         auto exStyle = GetWindowLong(active_window, GWL_EXSTYLE);
         if ((style & WS_CHILD) == WS_CHILD ||
@@ -192,6 +204,11 @@ void OverlayWindow::set_config(const wchar_t* config)
                 {
                     winkey_popup->set_theme(theme.value);
                 }
+            }
+            if (auto val = _values.get_string_value(disabledApps.name))
+            {
+                disabledApps.value = std::move(*val);
+                update_disabled_apps();
             }
         }
     }
@@ -343,6 +360,11 @@ intptr_t OverlayWindow::signal_event(LowlevelKeyboardEvent* event)
 void OverlayWindow::on_held()
 {
     auto windowInfo = GetShortcutGuideWindowInfo();
+    if (windowInfo.disabled)
+    {
+        target_state->was_hidden();
+        return;
+    }
     winkey_popup->show(windowInfo.hwnd, windowInfo.snappable);
 }
 
@@ -391,9 +413,54 @@ void OverlayWindow::init_settings()
         {
             theme.value = std::move(*val);
         }
+        if (auto val = settings.get_string_value(disabledApps.name))
+        {
+            disabledApps.value = std::move(*val);
+            update_disabled_apps();
+        }
     }
     catch (std::exception&)
     {
         // Error while loading from the settings file. Just let default values stay as they are.
+    }
+}
+
+bool OverlayWindow::is_disabled_app(wchar_t* exePath)
+{
+    auto exePathUpper = std::wstring(exePath);
+    CharUpperBuffW(exePathUpper.data(), (DWORD)exePathUpper.length());
+
+    for (const auto& row : disabled_apps_array)
+    {
+        const auto pos = exePathUpper.rfind(row);
+        const auto last_slash = exePathUpper.rfind('\\');
+        // Check that row occurs in disabled_apps_array, and its last occurrence contains in itself the first character after the last backslash.
+        if (pos != std::wstring::npos && pos <= last_slash + 1 && pos + row.length() > last_slash)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void OverlayWindow::update_disabled_apps()
+{
+    disabled_apps_array.clear();
+    auto disabledUppercase = disabledApps.value;
+    CharUpperBuffW(disabledUppercase.data(), (DWORD)disabledUppercase.length());
+    std::wstring_view view(disabledUppercase);
+    while (view.starts_with('\n') || view.starts_with('\r'))
+    {
+        view.remove_prefix(1);
+    }
+    while (!view.empty())
+    {
+        auto pos = (std::min)(view.find_first_of(L"\r\n"), view.length());
+        disabled_apps_array.emplace_back(view.substr(0, pos));
+        view.remove_prefix(pos);
+        while (view.starts_with('\n') || view.starts_with('\r'))
+        {
+            view.remove_prefix(1);
+        }
     }
 }
