@@ -102,13 +102,6 @@ namespace Microsoft.Plugin.Program
                 .Where(r => r?.Score > 0)
                 .ToArray();
 
-            if (result.Any())
-            {
-                var maxScore = result.Max(x => x.Score);
-                return result
-                    .Where(x => x.Score > Settings.MinScoreThreshold * maxScore);
-            }
-
             return Enumerable.Empty<Result>();
         }
 
